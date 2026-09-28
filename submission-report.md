@@ -4,9 +4,9 @@
 This project is a small operations assistant harness from to strach that accepts an objective , asks a model to reason and call tools, validates requests and responses, and records each run so it can be inspected or resumed. 
 ## Architecture and storage
 
-![Operations Agent Harness architecture and workflow](../assets/ops-agent-flow.visual-check.1440x900.light.png)
+![Operations Agent Harness architecture and workflow](assets/ops-agent-flow.visual-check.1440x900.light.png)
 
-Open the [interactive workflow diagram](../assets/ops-agent-flow.html) or inspect its [workflow source](../assets/ops-agent-flow.workflow.json).
+Open the [interactive workflow diagram](assets/ops-agent-flow.html) or inspect its [workflow source](assets/ops-agent-flow.workflow.json).
 
 
 The CLI and HTTP API validate input and create sessions. `SessionManager` records events and coordinates the `AgentLoop`; the loop builds model history from the event log, validates model output, enforces limits, and executes tools in model order. Tool results return to the model, while `create_incident` suspends execution until an approval decision arrives.
