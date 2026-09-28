@@ -1,0 +1,275 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Luồng chạy ops-agent-harness",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Chạy bình thường",
+        "focus": [
+          "user",
+          "cli_api",
+          "session",
+          "loop",
+          "model",
+          "executor",
+          "ops",
+          "answer"
+        ],
+        "note": "Theo một objective từ lúc gửi đến câu trả lời cuối."
+      },
+      {
+        "id": "approval",
+        "label": "Duyệt incident",
+        "focus": ["executor", "approval", "incident", "loop", "event_log"],
+        "note": "create_incident dừng trước side effect, chờ quyết định rồi mới resume."
+      },
+      {
+        "id": "trace",
+        "label": "Event và trace",
+        "focus": [
+          "session",
+          "loop",
+          "executor",
+          "event_log",
+          "projection",
+          "answer"
+        ],
+        "note": "Event log là nguồn dữ liệu để dựng trạng thái, summary và trace."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "user_surface", "label": "User · CLI / HTTP API" },
+    { "id": "runtime", "label": "Session · agent loop" },
+    { "id": "safety", "label": "Approval gate", "variant": "exception" },
+    { "id": "tools_evidence", "label": "Tools · event log" }
+  ],
+  "mainPath": ["user", "cli_api", "session", "loop", "model", "answer"],
+  "nodes": [
+    {
+      "id": "user",
+      "lane": "user_surface",
+      "col": 0,
+      "type": "external",
+      "label": "User",
+      "sublabel": "goal",
+      "width": 102
+    },
+    {
+      "id": "cli_api",
+      "lane": "user_surface",
+      "col": 1,
+      "type": "frontend",
+      "label": "CLI / HTTP API",
+      "sublabel": "run · serve",
+      "width": 102
+    },
+    {
+      "id": "session",
+      "lane": "runtime",
+      "col": 1,
+      "type": "backend",
+      "label": "SessionManager",
+      "sublabel": "status · approval",
+      "width": 102
+    },
+    {
+      "id": "loop",
+      "lane": "runtime",
+      "col": 2,
+      "type": "backend",
+      "label": "AgentLoop",
+      "sublabel": "limits · retry",
+      "width": 102
+    },
+    {
+      "id": "model",
+      "lane": "runtime",
+      "col": 3,
+      "type": "cloud",
+      "label": "Model",
+      "sublabel": "Demo / OpenRouter",
+      "width": 102
+    },
+    {
+      "id": "executor",
+      "lane": "runtime",
+      "col": 4,
+      "type": "backend",
+      "label": "Validate input",
+      "sublabel": "response · tool",
+      "width": 102
+    },
+    {
+      "id": "ops",
+      "lane": "tools_evidence",
+      "col": 5,
+      "type": "messagebus",
+      "label": "Ops tools",
+      "sublabel": "KB · status",
+      "width": 102
+    },
+    {
+      "id": "approval",
+      "lane": "safety",
+      "col": 4,
+      "type": "security",
+      "label": "Chờ user duyệt",
+      "sublabel": "create_incident",
+      "tag": "no side effect yet",
+      "width": 102
+    },
+    {
+      "id": "incident",
+      "lane": "safety",
+      "col": 5,
+      "type": "security",
+      "label": "Allow / deny",
+      "sublabel": "resume order",
+      "width": 102
+    },
+    {
+      "id": "event_log",
+      "lane": "tools_evidence",
+      "col": 2,
+      "type": "database",
+      "label": "Event log JSONL",
+      "sublabel": "append-only",
+      "width": 102
+    },
+    {
+      "id": "projection",
+      "lane": "tools_evidence",
+      "col": 3,
+      "type": "backend",
+      "label": "Trace view",
+      "sublabel": "show · SSE",
+      "width": 102
+    },
+    {
+      "id": "answer",
+      "lane": "user_surface",
+      "col": 5,
+      "type": "frontend",
+      "label": "Kết quả",
+      "sublabel": "answer · session status",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "id": "objective-to-interface",
+      "from": "user",
+      "to": "cli_api",
+      "role": "main"
+    },
+    {
+      "id": "interface-to-session",
+      "from": "cli_api",
+      "to": "session",
+      "label": "validated input",
+      "role": "main"
+    },
+    {
+      "id": "session-to-loop",
+      "from": "session",
+      "to": "loop",
+      "label": "start / resume",
+      "role": "main"
+    },
+    {
+      "id": "loop-to-model",
+      "from": "loop",
+      "to": "model",
+      "label": "messages + tools",
+      "role": "main"
+    },
+    {
+      "id": "model-to-executor",
+      "from": "model",
+      "to": "executor",
+      "label": "response / tool calls",
+      "role": "main"
+    },
+    {
+      "id": "executor-to-ops",
+      "from": "executor",
+      "to": "ops",
+      "label": "tool hợp lệ",
+      "role": "main"
+    },
+    {
+      "id": "ops-result-to-loop",
+      "from": "ops",
+      "to": "loop",
+      "label": "tool_result → bước model tiếp",
+      "role": "return"
+    },
+    {
+      "id": "executor-to-approval",
+      "from": "executor",
+      "to": "approval",
+      "label": "requiresApproval",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "id": "approval-to-decision",
+      "from": "approval",
+      "to": "incident",
+      "label": "allow hoặc deny",
+      "variant": "security"
+    },
+    {
+      "id": "decision-to-incident",
+      "from": "incident",
+      "to": "ops",
+      "label": "chỉ allow mới chạy",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "id": "loop-events",
+      "from": "loop",
+      "to": "event_log",
+      "label": "messages + spans",
+      "variant": "dashed"
+    },
+    {
+      "id": "event-projection",
+      "from": "event_log",
+      "to": "projection",
+      "label": "rebuild state + summary",
+      "variant": "dashed"
+    },
+    {
+      "id": "model-final-answer",
+      "from": "model",
+      "to": "answer",
+      "label": "end_turn → trả lời",
+      "variant": "emphasis",
+      "role": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Chạy thử",
+      "items": [
+        "Offline: bun run dev -- run \"checkout đang lỗi\" --model demo",
+        "OpenRouter: export OPENROUTER_API_KEY trước khi chạy CLI"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Điểm an toàn",
+      "items": [
+        "Tool chạy tuần tự; lỗi trả về model dưới dạng tool_result có isError.",
+        "create_incident chỉ thực thi sau allow; JSONL giữ event để đọc trace."
+      ]
+    }
+  ]
+}

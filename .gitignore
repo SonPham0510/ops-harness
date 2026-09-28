@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.ops-agent-harness/
+coverage/
+.env
+
+

@@ -1,0 +1,303 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Operations Agent Harness API",
+    "version": "0.1.0",
+    "description": "HTTP interface for creating and inspecting agent sessions, reading event logs, approving tools, interrupting runs, and reading metrics. Import this file into Postman or use the companion Postman collection."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true }
+                  },
+                  "required": ["ok"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition",
+            "content": {
+              "text/plain; version=0.0.4": { "schema": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "post": {
+        "summary": "Create and queue a session",
+        "description": "The session runs asynchronously. The server uses OpenRouter and requires OPENROUTER_API_KEY for model-backed execution.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSessionRequest" },
+              "example": {
+                "objective": "Investigate payments",
+                "modelId": "deepseek/deepseek-v4.1-flash",
+                "approvalPolicy": "manual",
+                "limits": { "maxSteps": 10, "maxToolCalls": 30 }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string", "enum": ["queued"] }
+                  },
+                  "required": ["id", "status"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/sessions/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "summary": "Get session and summary",
+        "responses": {
+          "200": {
+            "description": "Projected session and event summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": ["session", "summary"]
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/sessions/{id}/events": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "summary": "List session events",
+        "parameters": [
+          {
+            "name": "after_seq",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0 },
+            "description": "Return events with sequence numbers after this cursor."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events after the cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": ["events"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/sessions/{id}/events/stream": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "get": {
+        "summary": "Resume session events over SSE",
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 0 },
+            "description": "Resume after this event sequence."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/sessions/{id}/approvals": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "post": {
+        "summary": "Approve or deny a pending tool call",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApprovalRequest" },
+              "example": {
+                "tool_use_id": "<TOOL_USE_ID_FROM_EVENTS>",
+                "result": "allow"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Approval decision accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "enum": ["accepted"] }
+                  },
+                  "required": ["status"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "description": "Tool call is not awaiting approval" }
+        }
+      }
+    },
+    "/sessions/{id}/interrupt": {
+      "parameters": [{ "$ref": "#/components/parameters/SessionId" }],
+      "post": {
+        "summary": "Request session interruption",
+        "responses": {
+          "202": {
+            "description": "Interrupt accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "interrupt requested"
+                    }
+                  },
+                  "required": ["status"]
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "SessionId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Session ID returned by POST /sessions."
+      }
+    },
+    "schemas": {
+      "CreateSessionRequest": {
+        "type": "object",
+        "required": ["objective"],
+        "properties": {
+          "objective": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "example": "deepseek/deepseek-v4.1-flash"
+          },
+          "approvalPolicy": {
+            "type": "string",
+            "enum": ["manual", "auto_deny", "auto_allow"],
+            "default": "manual"
+          },
+          "limits": { "$ref": "#/components/schemas/HarnessLimits" }
+        }
+      },
+      "HarnessLimits": {
+        "type": "object",
+        "description": "All supplied limits must be positive integers. Unspecified limits use harness defaults.",
+        "properties": {
+          "maxIdenticalToolCalls": { "type": "integer", "minimum": 1 },
+          "maxMalformedResponses": { "type": "integer", "minimum": 1 },
+          "maxRunMs": { "type": "integer", "minimum": 1 },
+          "maxSteps": { "type": "integer", "minimum": 1 },
+          "maxToolCalls": { "type": "integer", "minimum": 1 },
+          "modelMaxRetries": { "type": "integer", "minimum": 1 },
+          "modelTimeoutMs": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "ApprovalRequest": {
+        "type": "object",
+        "required": ["tool_use_id", "result"],
+        "properties": {
+          "tool_use_id": { "type": "string", "minLength": 1 },
+          "result": { "type": "string", "enum": ["allow", "deny"] },
+          "deny_message": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": { "description": "Invalid request body or cursor." },
+      "NotFound": { "description": "Session not found." }
+    }
+  }
+}
